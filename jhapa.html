@@ -1,0 +1,814 @@
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <title>Jhapa</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Turf.js -->
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+      }
+      
+      /* Navigation Bars */
+      .navbar {
+        display: flex;
+        background-color: #2c3e50;
+        padding: 10px 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      }
+      
+      .navbar a {
+        color: white;
+        text-decoration: none;
+        padding: 10px 20px;
+        margin: 0 5px;
+        border-radius: 4px;
+        transition: background-color 0.3s;
+      }
+      
+      .navbar a:hover {
+        background-color: #3498db;
+      }
+      
+      .navbar a.active {
+        background-color: #2980b9;
+      }
+      
+      .top-nav {
+        justify-content: flex-start;
+      }
+      
+      .bottom-nav {
+        justify-content: center;
+        position: fixed;
+        bottom: 0;
+        padding:1rem 0;
+        width: 100%;
+        z-index: 1000;
+        color: white;
+      }
+      
+      #map { 
+        height: calc(100vh - 44px); /* Account for top nav bar */
+        width: 100%;
+      }
+      
+      /* Control Panel */
+      .control-panel {
+        position: absolute;
+        top: 64px; /* Below top nav */
+        right: 20px;
+        z-index: 1000;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        width: 300px;
+        max-height: calc(90vh - 104px); /* Account for nav bars */
+        overflow-y: auto;
+      }
+      
+      .control-section {
+        margin-bottom: 15px;
+      }
+      
+      .control-section h3 {
+        margin-top: 0;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 5px;
+        font-size: 16px;
+      }
+      
+      /* Jhapa Filters Section */
+      .jhapa-filters {
+        border: 2px solid #3498db;
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 15px;
+        background-color: #f8f9fa;
+      }
+      
+      .jhapa-filters h3 {
+        color: #2c3e50;
+        margin-top: 0;
+        text-align: center;
+        font-size: 18px;
+      }
+      
+      button {
+        background: #4a89dc;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        margin: 5px 0;
+        border-radius: 4px;
+        cursor: pointer;
+        width: 100%;
+        transition: background 0.2s;
+        font-size: 14px;
+      }
+      
+      button:hover {
+        background: #3b7dd8;
+      }
+      
+      button.active {
+        background: #3a539b;
+      }
+      
+      button.clear-btn {
+        background: #e74c3c;
+      }
+      
+      button.clear-btn:hover {
+        background: #c0392b;
+      }
+      
+      /* Legend */
+      .legend {
+        position: absolute;
+        bottom: 60px; /* Above bottom nav */
+        left: 20px;
+        z-index: 1000;
+        background: white;
+        padding: 10px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        font-size: 14px;
+      }
+      
+      .legend-item {
+        display: flex;
+        align-items: center;
+        margin: 5px 0;
+      }
+      
+      /* Feature Tables */
+      .feature-table {
+        max-height: 200px;
+        overflow-y: auto;
+        margin: 10px 0;
+        border: 1px solid #eee;
+        border-radius: 4px;
+      }
+      
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      
+      th, td {
+        padding: 6px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+      }
+      
+      th {
+        background: #f8f9fa;
+      }
+      
+      /* Measurement info */
+      .measure-info {
+        position: absolute;
+        top: 70px; /* Below top nav */
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        background: white;
+        padding: 8px 15px;
+        border-radius: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        font-size: 14px;
+        display: none;
+      }
+      
+      /* Filter controls */
+      .filter-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-bottom: 10px;
+      }
+      
+      .filter-controls button {
+        flex: 1;
+        min-width: 120px;
+        padding: 5px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+
+  <!-- Top Navigation Bar -->
+  <div class="navbar top-nav">
+    <a href="index.html" >Portfolio</a>
+    <a href="#"class="active">Hometown Jhapa</a>  
+  </div>
+
+  <div class="control-panel">
+  
+    
+    <div class="control-section">
+      <h3><center>Spatial Tools<center></h3>
+      <button id="bufferBtn" onclick="enableBuffer()">🌀 Create Buffer</button>
+      <button id="measureBtn" onclick="enableMeasure()">📏 Measure Distance</button>
+      <button id="nearestBtn" onclick="enableNearest()">🏥 Nearest Hospital</button>
+      <button class="clear-btn" onclick="clearAll()">❌ Clear All Drawings</button>
+    </div>
+
+    <div class="jhapa-filters">
+      <h3>Attribute Filters</h3>
+      <div class="filter-controls">
+        <button onclick="filterFeatures('hotel')">🏨 Hotels</button>
+        <button onclick="filterFeatures('restaurant')">🍴 Restaurants</button>
+        <button onclick="filterFeatures('airport')">✈️ Airports</button>
+        <button onclick="filterFeatures('none')">Hide All</button>
+      </div>
+    </div>
+    
+    <div class="control-section">
+      <h3>📍 Points of Interest</h3>
+      <div class="feature-table">
+        <table>
+          <thead>
+            <tr><th>Type</th><th>Name</th><th>Details</th></tr>
+          </thead>
+          <tbody id="featureList"></tbody>
+        </table>
+      </div>
+    </div>
+    
+    <div class="control-section">
+      <h3>🏥 Selected Hospitals</h3>
+      <div class="feature-table">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Lat</th><th>Lon</th></tr>
+          </thead>
+          <tbody id="hospitalList"></tbody>
+        </table>
+      </div>
+      <button onclick="exportCSV()">⬇ Export to CSV</button>
+    </div>
+  </div>
+
+  <div class="measure-info" id="measureInfo"></div>
+
+  <div class="legend">
+    <h3> Legend</h3>
+    <div class="legend-item">
+      <div style="color:red;font-weight:bold;margin-right:8px;">H</div>
+      <span>Hospital</span>
+    </div>
+    <div class="legend-item">
+      <div style="color:blue;font-weight:bold;margin-right:8px;">🚌</div>
+      <span>Bus Station</span>
+    </div>
+    <div class="legend-item">
+      <div style="color:gold;font-weight:bold;margin-right:8px;">🏨</div>
+      <span>Hotel</span>
+    </div>
+    <div class="legend-item">
+      <div style="color:green;font-weight:bold;margin-right:8px;">🍴</div>
+      <span>Restaurant</span>
+    </div>
+    <div class="legend-item">
+      <div style="color:purple;font-weight:bold;margin-right:8px;">✈️</div>
+      <span>Airport</span>
+    </div>
+    <div class="legend-item">
+      <div style="width:20px;height:20px;background:green;border-radius:50%;margin-right:8px;"></div>
+      <span>Buffer Zone</span>
+    </div>
+    <div class="legend-item">
+      <div style="width:20px;height:3px;background:purple;margin:8px 8px 8px 0;"></div>
+      <span>Measurement</span>
+    </div>
+    <div class="legend-item">
+      <div style="width:20px;height:3px;background:#e67e22;margin:8px 8px 8px 0;"></div>
+      <span>Nearest Path</span>
+    </div>
+  </div>
+
+  <!-- Bottom  Bar -->
+  <div class="navbar bottom-nav" >
+    © 2025 Pratistha Laxmi Poudel
+  </div>
+
+  <div id="map"></div>
+
+  <script>
+  // Initialize map centered on Chandragadhi Airport
+  const map = L.map('map').setView([26.6675, 88.0789], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  // Custom icons
+  const hospitalIcon = L.divIcon({
+    html: '<b style="color:white;background:red;padding:3px;border-radius:50%;">H</b>',
+    className: '', 
+    iconSize: [20, 20]
+  });
+
+  const busIcon = L.divIcon({
+    html: '<b style="color:white;background:blue;padding:3px;border-radius:50%;">🚌</b>',
+    className: '', 
+    iconSize: [20, 20]
+  });
+
+  const hotelIcon = L.divIcon({
+    html: '<b style="color:white;background:gold;padding:3px;border-radius:50%;">🏨</b>',
+    className: '', 
+    iconSize: [20, 20]
+  });
+
+  const restaurantIcon = L.divIcon({
+    html: '<b style="color:white;background:green;padding:3px;border-radius:50%;">🍴</b>',
+    className: '', 
+    iconSize: [20, 20]
+  });
+
+  const airportIcon = L.divIcon({
+    html: '<b style="color:white;background:purple;padding:3px;border-radius:50%;">✈️</b>',
+    className: '', 
+    iconSize: [24, 24]
+  });
+
+  // Data storage
+  let hospitals = [];
+  let busStations = [];
+  let hotels = [];
+  let restaurants = [];
+  let airports = [];
+  let selectedHospitals = [];
+  let drawnLayers = [];
+  let currentMode = null;
+  let measurePoints = [];
+  let measurePolyline = null;
+  let currentBuffer = null;
+  let currentFilter = 'none';
+
+  // Tool activation functions
+  function enableBuffer() {
+    resetTools();
+    currentMode = 'buffer';
+    document.getElementById('bufferBtn').classList.add('active');
+    document.getElementById('measureInfo').style.display = 'block';
+    document.getElementById('measureInfo').textContent = 'Click on map to create buffer. Right-click to cancel.';
+  }
+
+  function enableMeasure() {
+    resetTools();
+    currentMode = 'measure';
+    document.getElementById('measureBtn').classList.add('active');
+    document.getElementById('measureInfo').style.display = 'block';
+    document.getElementById('measureInfo').textContent = 'Click points to measure distance. Right-click to finish.';
+    measurePoints = []; // Reset measurement points
+  }
+
+  function enableNearest() {
+    resetTools();
+    currentMode = 'nearest';
+    document.getElementById('nearestBtn').classList.add('active');
+    document.getElementById('measureInfo').style.display = 'block';
+    document.getElementById('measureInfo').textContent = 'Click near bus station to find nearest hospital.';
+  }
+
+  function resetTools() {
+    document.querySelectorAll('.control-panel button').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    if (measurePolyline) {
+      map.removeLayer(measurePolyline);
+      measurePolyline = null;
+    }
+    measurePoints = [];
+    document.getElementById('measureInfo').style.display = 'none';
+    currentMode = null;
+  }
+
+  function clearAll() {
+    drawnLayers.forEach(layer => {
+      if (layer && map.hasLayer(layer)) {
+        map.removeLayer(layer);
+      }
+    });
+    drawnLayers = [];
+    
+    if (currentBuffer) {
+      map.removeLayer(currentBuffer);
+      currentBuffer = null;
+    }
+    
+    resetTools();
+  }
+
+  // Map click handlers
+  map.on('click', function(e) {
+    if (!currentMode) return;
+    
+    if (currentMode === 'buffer') {
+      const radius = prompt("Enter buffer radius in meters (default 1000m):", "1000");
+      if (radius && !isNaN(radius)) {
+        if (currentBuffer) {
+          map.removeLayer(currentBuffer);
+        }
+        currentBuffer = L.circle(e.latlng, {
+          radius: parseFloat(radius),
+          color: 'green',
+          fillColor: '#2ecc71',
+          fillOpacity: 0.2,
+          weight: 2
+        }).addTo(map);
+        drawnLayers.push(currentBuffer);
+      }
+    }
+    else if (currentMode === 'measure') {
+      measurePoints.push(e.latlng);
+      
+      const marker = L.circleMarker(e.latlng, {
+        radius: 6,
+        color: 'purple',
+        fillColor: '#9b59b6',
+        fillOpacity: 1,
+        weight: 2
+      }).addTo(map);
+      drawnLayers.push(marker);
+      
+      // Remove previous polyline if exists
+      if (measurePolyline) {
+        map.removeLayer(measurePolyline);
+      }
+      
+      // Create new polyline with all points
+      measurePolyline = L.polyline(measurePoints, { 
+        color: 'purple',
+        weight: 3,
+        dashArray: '5, 5'
+      }).addTo(map);
+      drawnLayers.push(measurePolyline);
+      
+      // Calculate total distance
+      let totalDistance = 0;
+      if (measurePoints.length >= 2) {
+        for (let i = 1; i < measurePoints.length; i++) {
+          const from = turf.point([measurePoints[i-1].lng, measurePoints[i-1].lat]);
+          const to = turf.point([measurePoints[i].lng, measurePoints[i].lat]);
+          totalDistance += turf.distance(from, to);
+        }
+        document.getElementById('measureInfo').textContent = `Total Distance: ${totalDistance.toFixed(2)} km (${measurePoints.length} points)`;
+      } else {
+        document.getElementById('measureInfo').textContent = 'Click another point to measure distance';
+      }
+    }
+    else if (currentMode === 'nearest') {
+      const clickCoord = [e.latlng.lat, e.latlng.lng];
+      let minDist = Infinity;
+      let nearestHospital = null;
+
+      hospitals.forEach(h => {
+        const dist = turf.distance(
+          turf.point([e.latlng.lng, e.latlng.lat]),
+          turf.point([h.coord[1], h.coord[0]])
+        );
+        if (dist < minDist) {
+          minDist = dist;
+          nearestHospital = h;
+        }
+      });
+
+      if (nearestHospital) {
+        drawnLayers = drawnLayers.filter(layer => {
+          if (layer.nearestPath) {
+            map.removeLayer(layer);
+            return false;
+          }
+          return true;
+        });
+        
+        const line = L.polyline([
+          [e.latlng.lat, e.latlng.lng],
+          nearestHospital.coord
+        ], { 
+          color: '#e67e22',
+          weight: 3
+        });
+        line.nearestPath = true;
+        line.addTo(map);
+        drawnLayers.push(line);
+        
+        document.getElementById('measureInfo').textContent = 
+          `Nearest hospital: ${nearestHospital.name} (${minDist.toFixed(2)} km)`;
+      }
+    }
+  });
+
+  // Right-click to remove elements
+  map.on('contextmenu', function() {
+    if (currentMode === 'buffer' && currentBuffer) {
+      map.removeLayer(currentBuffer);
+      currentBuffer = null;
+      resetTools();
+    }
+    else if (currentMode === 'measure') {
+      // Right-click finishes measurement
+      if (measurePoints.length >= 2) {
+        document.getElementById('measureInfo').textContent = 
+          `Measurement complete. Total distance: ${document.getElementById('measureInfo').textContent.split(':')[1]}`;
+      } else {
+        document.getElementById('measureInfo').textContent = 'Measurement canceled';
+      }
+      resetTools();
+    }
+    else if (currentMode === 'nearest') {
+      // Existing nearest hospital cleanup
+      drawnLayers = drawnLayers.filter(layer => {
+        if (layer.nearestPath) {
+          map.removeLayer(layer);
+          return false;
+        }
+        return true;
+      });
+      resetTools();
+    }
+  });
+
+  // Filter features by type
+  function filterFeatures(type) {
+    currentFilter = type;
+    
+    // Show/hide markers on map
+    hotels.forEach(h => {
+      if (type === 'hotel') {
+        if (!map.hasLayer(h.marker)) h.marker.addTo(map);
+      } else {
+        if (map.hasLayer(h.marker)) map.removeLayer(h.marker);
+      }
+    });
+    
+    restaurants.forEach(r => {
+      if (type === 'restaurant') {
+        if (!map.hasLayer(r.marker)) r.marker.addTo(map);
+      } else {
+        if (map.hasLayer(r.marker)) map.removeLayer(r.marker);
+      }
+    });
+    
+    airports.forEach(a => {
+      if (type === 'airport') {
+        if (!map.hasLayer(a.marker)) a.marker.addTo(map);
+      } else {
+        if (map.hasLayer(a.marker)) map.removeLayer(a.marker);
+      }
+    });
+    
+    // Update feature list
+    updateFeatureList(type);
+  }
+
+  // Update the feature list table
+  function updateFeatureList(filterType) {
+    const featureList = document.getElementById("featureList");
+    featureList.innerHTML = '';
+    
+    if (filterType === 'hotel') {
+      hotels.forEach(h => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>🏨 Hotel</td>
+          <td>${h.name}</td>
+          <td><button onclick="zoomToFeature([${h.coord}])">View</button></td>
+        `;
+        featureList.appendChild(row);
+      });
+    }
+    else if (filterType === 'restaurant') {
+      restaurants.forEach(r => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>🍴 Restaurant</td>
+          <td>${r.name}</td>
+          <td><button onclick="zoomToFeature([${r.coord}])">View</button></td>
+        `;
+        featureList.appendChild(row);
+      });
+    }
+    else if (filterType === 'airport') {
+      airports.forEach(a => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>✈️ Airport</td>
+          <td>${a.name}</td>
+          <td><button onclick="zoomToFeature([${a.coord}])">View</button></td>
+        `;
+        featureList.appendChild(row);
+      });
+    }
+    else if (filterType === 'none') {
+      featureList.innerHTML = '<tr><td colspan="3">No features selected</td></tr>';
+    }
+  }
+
+  // Zoom to a specific feature
+  function zoomToFeature(coord) {
+    map.setView(coord, 15);
+  }
+
+  // Load data from Overpass API
+  function loadData() {
+    // Hospitals and bus stations
+    const healthTransportUrl = `https://overpass-api.de/api/interpreter?data=[out:json][timeout:60];(node["amenity"="hospital"](26.3,87.8,26.8,88.2);way["amenity"="hospital"](26.3,87.8,26.8,88.2);relation["amenity"="hospital"](26.3,87.8,26.8,88.2);node["amenity"="bus_station"](26.3,87.8,26.8,88.2);way["amenity"="bus_station"](26.3,87.8,26.8,88.2);relation["amenity"="bus_station"](26.3,87.8,26.8,88.2););out body;>;out skel qt;`;
+    
+    // Hotels and restaurants
+    const tourismDiningUrl = `https://overpass-api.de/api/interpreter?data=[out:json][timeout:60];(node["tourism"="hotel"](26.3,87.8,26.8,88.2);way["tourism"="hotel"](26.3,87.8,26.8,88.2);relation["tourism"="hotel"](26.3,87.8,26.8,88.2);node["amenity"="restaurant"](26.3,87.8,26.8,88.2);way["amenity"="restaurant"](26.3,87.8,26.8,88.2);relation["amenity"="restaurant"](26.3,87.8,26.8,88.2););out body;>;out skel qt;`;
+
+    // Load health and transport data
+    fetch(healthTransportUrl)
+      .then(res => res.json())
+      .then(data => {
+        data.elements.forEach(el => {
+          if (el.type === "node" && el.tags) {
+            const coord = [el.lat, el.lon];
+            const name = el.tags.name || "Unnamed Facility";
+
+            if (el.tags.amenity === "hospital") {
+              const marker = L.marker(coord, { 
+                icon: hospitalIcon,
+                title: name
+              })
+              .bindPopup(`
+                <b>${name}</b><br>
+                <small>Hospital</small><br>
+                <button onclick="addToTable('${name.replace(/'/g, "\\'")}', [${coord}])">
+                  Add to list
+                </button>
+              `)
+              .addTo(map);
+              hospitals.push({ coord, name, marker });
+            }
+
+            if (el.tags.amenity === "bus_station") {
+              const marker = L.marker(coord, { 
+                icon: busIcon,
+                title: name
+              })
+              .bindPopup(`<b>${name}</b><br><small>Bus Station</small>`)
+              .addTo(map);
+              busStations.push({ coord, marker });
+            }
+          }
+        });
+      })
+      .catch(err => {
+        console.error("Error loading health/transport data:", err);
+      });
+
+    // Load tourism and dining data (but don't add to map yet)
+    fetch(tourismDiningUrl)
+      .then(res => res.json())
+      .then(data => {
+        data.elements.forEach(el => {
+          if (el.type === "node" && el.tags) {
+            const coord = [el.lat, el.lon];
+            const name = el.tags.name || "Unnamed Facility";
+
+            if (el.tags.tourism === "hotel") {
+              const marker = L.marker(coord, { 
+                icon: hotelIcon,
+                title: name
+              })
+              .bindPopup(`
+                <b>${name}</b><br>
+                <small>Hotel</small><br>
+                ${el.tags.website ? `<a href="${el.tags.website}" target="_blank">Website</a><br>` : ''}
+                ${el.tags.phone ? `Phone: ${el.tags.phone}` : ''}
+              `);
+              hotels.push({ coord, name, marker, tags: el.tags });
+            }
+
+            if (el.tags.amenity === "restaurant") {
+              const marker = L.marker(coord, { 
+                icon: restaurantIcon,
+                title: name
+              })
+              .bindPopup(`
+                <b>${name}</b><br>
+                <small>Restaurant</small><br>
+                ${el.tags.cuisine ? `Cuisine: ${el.tags.cuisine}<br>` : ''}
+                ${el.tags.phone ? `Phone: ${el.tags.phone}` : ''}
+              `);
+              restaurants.push({ coord, name, marker, tags: el.tags });
+            }
+          }
+        });
+      })
+      .catch(err => {
+        console.error("Error loading tourism/dining data:", err);
+      });
+
+    // Manually add Chandragadhi Airport (since it might not be in OSM data)
+    const chandragadhiAirport = {
+      coord: [26.6675, 88.0789],
+      name: "Chandragadhi Airport",
+      tags: {
+        aeroway: "aerodrome",
+        iata: "BDP",
+        icao: "VNCG",
+        operator: "Civil Aviation Authority of Nepal"
+      }
+    };
+    
+    const airportMarker = L.marker(chandragadhiAirport.coord, { 
+      icon: airportIcon,
+      title: chandragadhiAirport.name
+    })
+    .bindPopup(`
+      <b>${chandragadhiAirport.name}</b><br>
+      <small>Airport</small><br>
+      IATA: ${chandragadhiAirport.tags.iata}<br>
+      ICAO: ${chandragadhiAirport.tags.icao}<br>
+      Operator: ${chandragadhiAirport.tags.operator}
+    `);
+    
+    airports.push({ 
+      coord: chandragadhiAirport.coord, 
+      name: chandragadhiAirport.name, 
+      marker: airportMarker, 
+      tags: chandragadhiAirport.tags 
+    });
+
+    updateFeatureList('none');
+  }
+
+  // Add hospital to table
+  function addToTable(name, coord) {
+    const lat = coord[0].toFixed(5);
+    const lon = coord[1].toFixed(5);
+    selectedHospitals.push({ name, lat, lon });
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${name}</td>
+      <td>${lat}</td>
+      <td>${lon}</td>
+    `;
+    document.getElementById("hospitalList").appendChild(row);
+  }
+
+  // Export to CSV
+  function exportCSV() {
+    if (selectedHospitals.length === 0) {
+      alert("No hospitals selected!");
+      return;
+    }
+
+    let csv = "Name,Latitude,Longitude\n";
+    selectedHospitals.forEach(h => {
+      csv += `"${h.name}",${h.lat},${h.lon}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "jhapa_hospitals.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  // Initialize the map
+  loadData();
+    // Load Jhapa boundary
+  fetch('jhapaborder.geojson')
+    .then(res => res.json())
+    .then(data => {
+      const boundaryLayer = L.geoJSON(data, {
+        style: {
+          color: "#e74c3c",
+          weight: 2,
+          fillOpacity: 0.05
+        }
+      }).addTo(map);
+      map.fitBounds(boundaryLayer.getBounds());
+    })
+    .catch(err => console.error("Error loading Jhapa border:", err));
+</script>
+ 
+
+  </body>
+  </html>
